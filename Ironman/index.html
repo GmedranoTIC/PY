@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Detección de Manos - Ironman</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
     <style>
         body { text-align: center; background-color: black; color: white; }
         video, canvas { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
@@ -21,7 +21,6 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const sound = document.getElementById('blast-sound');
-        let model;
         let animating = false;
         
         async function setupCamera() {
@@ -32,24 +31,35 @@
             canvas.height = video.videoHeight;
         }
         
-        async function detectHands() {
-            const predictions = await model.estimateHands(video);
+        const hands = new Hands({
+            locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+        hands.setOptions({
+            maxNumHands: 2,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.5
+        });
+        hands.onResults(detectHands);
+        
+        async function detectHands(results) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            if (predictions.length > 0) {
-                for (let hand of predictions) {
-                    const landmarks = hand.landmarks;
+            if (results.multiHandLandmarks) {
+                for (let landmarks of results.multiHandLandmarks) {
+                    drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {color: 'cyan', lineWidth: 2});
+                    drawLandmarks(ctx, landmarks, {color: 'red', radius: 5});
+                    
                     const palmBase = landmarks[0];
                     const fingertips = [8, 12, 16, 20].map(i => landmarks[i]);
                     
-                    let isOpen = fingertips.every(f => palmBase[1] > f[1]);
+                    let isOpen = fingertips.every(f => palmBase.y > f.y);
                     if (isOpen && !animating) {
-                        animateEffect(palmBase[0], palmBase[1]);
+                        animateEffect(palmBase.x * canvas.width, palmBase.y * canvas.height);
                         sound.play();
                     }
                 }
             }
-            requestAnimationFrame(detectHands);
         }
         
         function animateEffect(x, y) {
@@ -80,11 +90,21 @@
         
         async function main() {
             await setupCamera();
-            model = await handpose.load();
-            detectHands();
+            const camera = new Camera(video, {
+                onFrame: async () => {
+                    await hands.send({image: video});
+                },
+                width: 640,
+                height: 480
+            });
+            camera.start();
         }
         
         main();
+    </script>
+</body>
+</html>
+
     </script>
 </body>
 </html>
