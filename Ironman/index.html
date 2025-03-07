@@ -2,12 +2,11 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <!--  <meta name="viewport" content="width=device-width, initial-scale=1.0"> -->
-    <title> GmedranoTIC creando con IA - IRONMAN</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://docs.opencv.org/3.4.1/opencv.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detección de Manos - Ironman</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
     <style>
         body { text-align: center; background-color: black; color: white; }
         video, canvas { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
@@ -24,7 +23,7 @@
         const ctx = canvas.getContext('2d');
         const sound = document.getElementById('blast-sound');
         let animating = false;
-        
+
         async function setupCamera() {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
             video.srcObject = stream;
@@ -32,21 +31,27 @@
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
         }
-        
+
         const hands = new Hands({
             locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
         hands.setOptions({
-            selfieMode:true,
             maxNumHands: 2,
-         <!--     modelComplexity: 1, -->
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5,
-         <!--     useCpuInference: false -->
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.5
         });
         hands.onResults(detectHands);
+
+        const camera = new Camera(video, {
+            onFrame: async () => {
+                await hands.send({image: video});
+            },
+            width: 640,
+            height: 480
+        });
         
-        async function detectHands(results) {
+        function detectHands(results) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
@@ -66,7 +71,7 @@
                 }
             }
         }
-        
+
         function animateEffect(x, y) {
             animating = true;
             let size = 10;
@@ -95,21 +100,10 @@
         
         async function main() {
             await setupCamera();
-            const camera = new Camera(video, {
-                onFrame: async () => {
-                    await hands.send({image: video});
-                },
-              <!--  width: 1280, -->
-                width: 1280, height: 720
-            });
             camera.start();
         }
         
         main();
-    </script>
-</body>
-</html>
-
     </script>
 </body>
 </html>
