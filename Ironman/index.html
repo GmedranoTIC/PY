@@ -17,8 +17,8 @@
         }
         #container {
             position: relative;
-            width: 1920px;
-            height: 1080px;
+            width: 1280px;
+            height: 720px;
             margin: 0 auto;
         }
         video, canvas { 
@@ -26,8 +26,8 @@
             top: 50%; 
             left: 50%; 
             transform: translate(-50%, -50%); 
-            width: 1920px;
-            height: 1080px;
+            width: 1280px;
+            height: 720px;
         }
         #title {
             position: absolute;
@@ -72,12 +72,12 @@
 
         async function setupCamera() {
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { width: 1920, height: 1080 }
+                video: { width: 1280, height: 720 }
             });
             video.srcObject = stream;
             await new Promise(resolve => video.onloadedmetadata = resolve);
-            canvas.width = 1920;
-            canvas.height = 1080;
+            canvas.width = 1280;
+            canvas.height = 720;
         }
 
         const hands = new Hands({
@@ -95,8 +95,8 @@
             onFrame: async () => {
                 await hands.send({image: video});
             },
-            width: 1920,
-            height: 1080
+            width: 1280,
+            height: 720
         });
         
         function detectHands(results) {
@@ -135,33 +135,54 @@
 
         function animateEffect(x, y) {
             animating = true;
-            let size = 10;
-            let alpha = 1.0;
-            const colors = ['yellow', 'white', 'red', 'black'];
-            let colorIndex = 0;
+            let size = 10;  // Tamaño inicial
+            let alpha = 0;  // Opacidad inicial (fade in)
+            let time = 0;   // Contador de tiempo para el delay
+            const delayDuration = 500;  // Delay inicial en milisegundos (0.5s)
+            const fadeDuration = 1000;  // Duración del fade in/out en milisegundos (1s cada uno)
+            const maxSize = 200;        // Tamaño máximo del punto
             
-            // Mostrar overlay y reproducir sonido
             overlay.style.display = 'block';
             sound.currentTime = 0;
             sound.play().catch(e => console.log("Error al reproducir sonido:", e));
             
-            function step() {
+            function step(timestamp) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = colors[colorIndex];
+                
+                time += 16; // Aproximadamente 60 FPS (1000ms / 60 ≈ 16ms por frame)
+                
+                if (time < delayDuration) {
+                    // Durante el delay inicial, no dibujamos nada
+                    requestAnimationFrame(step);
+                    return;
+                }
+                
+                // Calcular el progreso después del delay
+                let progress = (time - delayDuration) / (fadeDuration * 2); // Total: 2s (fade in + fade out)
+                
+                // Fade in (0 a 1) y fade out (1 a 0)
+                if (progress <= 0.5) {
+                    alpha = progress * 2; // 0 a 1 en el primer segundo
+                } else {
+                    alpha = 1 - (progress - 0.5) * 2; // 1 a 0 en el segundo segundo
+                }
+                
+                // Crecimiento del tamaño (proporcional al tiempo después del delay)
+                size = 10 + (maxSize - 10) * Math.min(progress * 2, 1);
+                
+                // Dibujar el punto amarillo
+                ctx.fillStyle = 'yellow';
                 ctx.globalAlpha = alpha;
                 ctx.beginPath();
                 ctx.arc(x, y, size, 0, 2 * Math.PI);
                 ctx.fill();
                 
-                size += 10;
-                alpha -= 0.02;
-                if (size > 100) colorIndex = Math.min(colorIndex + 1, colors.length - 1);
-                
-                if (alpha > 0) requestAnimationFrame(step);
-                else {
+                if (time - delayDuration < fadeDuration * 2) {
+                    requestAnimationFrame(step);
+                } else {
                     animating = false;
-                    overlay.style.display = 'none'; // Ocultar overlay al finalizar
+                    overlay.style.display = 'none';
                 }
             }
             requestAnimationFrame(step);
