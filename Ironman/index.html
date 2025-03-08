@@ -3,16 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GmedranoTIC creando con IA - IRONMAN</title>
+    <title>Detección de Manos - Ironman</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
     <style>
         body { text-align: center; background-color: black; color: white; }
-        video, canvas { position: absolute; top: 50%; left: 50%; transform: translate(0%, 0%); }
-       <!-- video, canvas { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); } -->
-
-
+        video { display: none; }
+        canvas { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
     </style>
 </head>
 <body>
@@ -91,6 +89,8 @@
                 ctx.arc(x, y, size, 0, 2 * Math.PI);
                 ctx.fill();
                 
+                drawHandLandmarks(); // Redibujar las manos mientras la animación ocurre
+                
                 size += 10;
                 alpha -= 0.02;
                 if (size > 100) colorIndex = Math.min(colorIndex + 1, colors.length - 1);
@@ -99,6 +99,17 @@
                 else animating = false;
             }
             step();
+        }
+        
+        function drawHandLandmarks() {
+            hands.onResults(results => {
+                if (results.multiHandLandmarks) {
+                    for (let landmarks of results.multiHandLandmarks) {
+                        drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {color: 'cyan', lineWidth: 2});
+                        drawLandmarks(ctx, landmarks, {color: 'red', radius: 5});
+                    }
+                }
+            });
         }
         
         async function main() {
