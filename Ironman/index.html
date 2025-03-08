@@ -28,14 +28,14 @@
             font-family: Arial, sans-serif;
             text-align: center;
             top: 20px;
-            width: 640px;
+            width: 1280px;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
         }
     </style>
 </head>
 <body>
-    <video id="videoElement" width="640" height="480" autoplay playsinline></video>
-    <canvas id="canvasElement" width="640" height="480"></canvas>
+    <video id="videoElement" width="1280" height="720" autoplay playsinline></video>
+    <canvas id="canvasElement" width="1280" height="720"></canvas>
     <div id="textOverlay">GmedranoTIC creando con IA - IRONMAN</div>
     <audio id="blastSound" src="blast.mp3"></audio> <!-- Add your blast.mp3 file -->
 
@@ -78,6 +78,7 @@
         function detectOpenHand(results) {
             detectedCenters = [];
             if (results.multiHandLandmarks) {
+                console.log("Hands detected:", results.multiHandLandmarks.length); // Debug log
                 for (const landmarks of results.multiHandLandmarks) {
                     const palmBase = landmarks[0]; // Wrist
                     const indexTip = landmarks[8];
@@ -91,7 +92,9 @@
                     const ringDist = palmBase.y - ringTip.y;
                     const pinkyDist = palmBase.y - pinkyTip.y;
 
-                    const threshold = 0.1;
+                    console.log(`Distances: Index=${indexDist}, Middle=${middleDist}, Ring=${ringDist}, Pinky=${pinkyDist}`); // Debug log
+
+                    const threshold = 0.05; // Lowered threshold for better detection
                     const isOpen = (
                         indexDist > threshold &&
                         middleDist > threshold &&
@@ -100,6 +103,7 @@
                     );
 
                     if (isOpen) {
+                        console.log("Open hand detected!"); // Debug log
                         const palmLandmarks = [0, 5, 9, 13, 17];
                         const cX = landmarks.reduce((sum, lm, i) => 
                             palmLandmarks.includes(i) ? sum + lm.x : sum, 0) / 5 * canvasElement.width;
@@ -108,6 +112,8 @@
                         detectedCenters.push({ x: cX, y: cY });
                     }
                 }
+            } else {
+                console.log("No hands detected."); // Debug log
             }
             return detectedCenters;
         }
@@ -115,7 +121,6 @@
         function drawAnimatedDot(timestamp) {
             if (!animating) return;
 
-            // Throttle to avoid overloading (e.g., 60 FPS)
             if (timestamp - lastFrameTime < 16) { // ~60 FPS
                 requestAnimationFrame(drawAnimatedDot);
                 return;
@@ -166,6 +171,7 @@
 
             if (detectedCenters.length > 0) {
                 if (!animating) {
+                    console.log("Starting animation at centers:", detectedCenters); // Debug log
                     startTime = performance.now();
                     animating = true;
                     if (!soundPlayed) {
@@ -188,8 +194,8 @@
             onFrame: async () => {
                 await hands.send({ image: videoElement });
             },
-            width: 640,
-            height: 480
+            width: 1280,
+            height: 720
         });
         camera.start().catch(err => console.error("Camera start failed:", err));
 
