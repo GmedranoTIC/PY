@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GmedranoTIC creando con IA - IRONMANggg</title>
+    <title>GmedranoTIC creando con IA - IRONMAN</title>
     <style>
         body {
             margin: 0;
@@ -21,11 +21,22 @@
         #canvasElement {
             position: absolute;
         }
+        #textOverlay {
+            position: absolute;
+            color: white;
+            font-size: 24px;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            top: 20px;
+            width: 640px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
     </style>
 </head>
 <body>
     <video id="videoElement" width="640" height="480" autoplay playsinline></video>
     <canvas id="canvasElement" width="640" height="480"></canvas>
+    <div id="textOverlay">GmedranoTIC creando con IA - IRONMAN</div>
     <audio id="blastSound" src="blast.mp3"></audio> <!-- Add your blast.mp3 file -->
 
     <!-- Load MediaPipe Hands -->
@@ -62,6 +73,7 @@
         let startTime = 0;
         let soundPlayed = false;
         let detectedCenters = [];
+        let lastFrameTime = 0;
 
         function detectOpenHand(results) {
             detectedCenters = [];
@@ -103,11 +115,19 @@
         function drawAnimatedDot(timestamp) {
             if (!animating) return;
 
+            // Throttle to avoid overloading (e.g., 60 FPS)
+            if (timestamp - lastFrameTime < 16) { // ~60 FPS
+                requestAnimationFrame(drawAnimatedDot);
+                return;
+            }
+            lastFrameTime = timestamp;
+
             const elapsedTime = (timestamp - startTime) / 1000; // Convert to seconds
             const totalDuration = appearDuration + growFadeDuration;
 
             if (elapsedTime > totalDuration) {
                 animating = false;
+                canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
                 return;
             }
 
@@ -142,8 +162,6 @@
 
         function onResults(results) {
             canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
             detectOpenHand(results);
 
             if (detectedCenters.length > 0) {
@@ -151,7 +169,7 @@
                     startTime = performance.now();
                     animating = true;
                     if (!soundPlayed) {
-                        blastSound.play();
+                        blastSound.play().catch(err => console.error("Audio play failed:", err));
                         soundPlayed = true;
                     }
                     requestAnimationFrame(drawAnimatedDot);
@@ -170,10 +188,16 @@
             onFrame: async () => {
                 await hands.send({ image: videoElement });
             },
-            width: 1280,
-            height: 720
+            width: 640,
+            height: 480
         });
-        camera.start();
+        camera.start().catch(err => console.error("Camera start failed:", err));
+
+        // Cleanup on page unload
+        window.addEventListener('unload', () => {
+            camera.stop();
+            hands.close();
+        });
     </script>
 </body>
 </html>
