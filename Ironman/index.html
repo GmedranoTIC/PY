@@ -1,209 +1,178 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GmedranoTIC creando con IA - IRONMANpppp</title>
+    <title>GmedranoTIC creando con IA - IRONMAN</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background: #000;
-            overflow: hidden;
-        }
-        #videoElement {
-            transform: scaleX(-1); /* Mirror the video */
-        }
-        #canvasElement {
-            position: absolute;
-        }
-        #textOverlay {
-            position: absolute;
-            color: white;
-            font-size: 24px;
+        body { 
+            text-align: center; 
+            background-color: black; 
+            color: white; 
+            margin: 0; 
             font-family: Arial, sans-serif;
-            text-align: center;
-            top: 20px;
-            width: 1280px;
+        }
+        #container {
+            position: relative;
+            width: 1920px;
+            height: 1080px;
+            margin: 0 auto;
+        }
+        video, canvas { 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            width: 1920px;
+            height: 1080px;
+        }
+        #title {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 36px;
+            color: white;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            z-index: 10;
+        }
+        #overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: red;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            z-index: 10;
+            display: none;
         }
     </style>
 </head>
 <body>
-    <video id="videoElement" width="1280" height="720" autoplay playsinline></video>
-    <canvas id="canvasElement" width="1280" height="720"></canvas>
-    <div id="textOverlay">GmedranoTIC creando con IA - IRONMANppp</div>
-    <audio id="blastSound" src="blast.mp3"></audio> <!-- Add your blast.mp3 file -->
-
-    <!-- Load MediaPipe Hands -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <div id="container">
+        <div id="title">GmedranoTIC creando con IA - IRONMAN</div>
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas"></canvas>
+        <div id="overlay">Disparo</div>
+    </div>
+    <audio id="blast-sound" src="blast.mp3"></audio>
     
     <script>
-        const videoElement = document.getElementById('videoElement');
-        const canvasElement = document.getElementById('canvasElement');
-        const canvasCtx = canvasElement.getContext('2d');
-        const blastSound = document.getElementById('blastSound');
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const overlay = document.getElementById('overlay');
+        const ctx = canvas.getContext('2d');
+        const sound = document.getElementById('blast-sound');
+        let animating = false;
+        let wasOpen = false;
 
-        // MediaPipe Hands setup
+        async function setupCamera() {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { width: 1920, height: 1080 }
+            });
+            video.srcObject = stream;
+            await new Promise(resolve => video.onloadedmetadata = resolve);
+            canvas.width = 1920;
+            canvas.height = 1080;
+        }
+
         const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`
+            locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
         hands.setOptions({
             maxNumHands: 2,
+            modelComplexity: 1,
             minDetectionConfidence: 0.7,
             minTrackingConfidence: 0.5
         });
-        hands.onResults(onResults);
+        hands.onResults(detectHands);
 
-        // Animation parameters
-        const appearDuration = 0.8; // seconds
-        const growFadeDuration = 0.8; // seconds
-        const colors = [
-            'rgba(0, 255, 255, 1)',  // Yellow
-            'rgba(255, 255, 255, 1)', // White
-            'rgba(255, 0, 0, 1)',     // Red
-            'rgba(0, 0, 0, 1)'       // Black
-        ];
-        let animating = false;
-        let startTime = 0;
-        let soundPlayed = false;
-        let detectedCenters = [];
-        let lastFrameTime = 0;
-
-        function detectOpenHand(results) {
-            detectedCenters = [];
-            if (results.multiHandLandmarks) {
-                console.log("Hands detected:", results.multiHandLandmarks.length); // Debug log
-                for (const landmarks of results.multiHandLandmarks) {
-                    const palmBase = landmarks[0]; // Wrist
-                    const indexTip = landmarks[8];
-                    const middleTip = landmarks[12];
-                    const ringTip = landmarks[16];
-                    const pinkyTip = landmarks[20];
-
-                    // Calculate vertical distances
-                    const indexDist = palmBase.y - indexTip.y;
-                    const middleDist = palmBase.y - middleTip.y;
-                    const ringDist = palmBase.y - ringTip.y;
-                    const pinkyDist = palmBase.y - pinkyTip.y;
-
-                    console.log(`Distances: Index=${indexDist}, Middle=${middleDist}, Ring=${ringDist}, Pinky=${pinkyDist}`); // Debug log
-
-                    const threshold = 0.05; // Lowered threshold for better detection
-                    const isOpen = (
-                        indexDist > threshold &&
-                        middleDist > threshold &&
-                        ringDist > threshold &&
-                        pinkyDist > threshold
-                    );
-
-                    if (isOpen) {
-                        console.log("Open hand detected!"); // Debug log
-                        const palmLandmarks = [0, 5, 9, 13, 17];
-                        const cX = landmarks.reduce((sum, lm, i) => 
-                            palmLandmarks.includes(i) ? sum + lm.x : sum, 0) / 5 * canvasElement.width;
-                        const cY = landmarks.reduce((sum, lm, i) => 
-                            palmLandmarks.includes(i) ? sum + lm.y : sum, 0) / 5 * canvasElement.height;
-                        detectedCenters.push({ x: cX, y: cY });
-                    }
-                }
-            } else {
-                console.log("No hands detected."); // Debug log
-            }
-            return detectedCenters;
-        }
-
-        function drawAnimatedDot(timestamp) {
-            if (!animating) return;
-
-            if (timestamp - lastFrameTime < 16) { // ~60 FPS
-                requestAnimationFrame(drawAnimatedDot);
-                return;
-            }
-            lastFrameTime = timestamp;
-
-            const elapsedTime = (timestamp - startTime) / 1000; // Convert to seconds
-            const totalDuration = appearDuration + growFadeDuration;
-
-            if (elapsedTime > totalDuration) {
-                animating = false;
-                canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-                return;
-            }
-
-            let size, alpha, color;
-            if (elapsedTime <= appearDuration) {
-                const progress = elapsedTime / appearDuration;
-                alpha = progress;
-                size = 10;
-                color = colors[0];
-            } else {
-                const growFadeElapsed = elapsedTime - appearDuration;
-                const growFadeProgress = growFadeElapsed / growFadeDuration;
-                size = 10 + (400 - 10) * growFadeProgress;
-                alpha = 0.8 - growFadeProgress;
-                const colorStep = Math.min(
-                    Math.floor(growFadeElapsed / (growFadeDuration / colors.length)),
-                    colors.length - 1
-                );
-                color = colors[colorStep];
-            }
-
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            detectedCenters.forEach(center => {
-                canvasCtx.beginPath();
-                canvasCtx.arc(center.x, center.y, size, 0, 2 * Math.PI);
-                canvasCtx.fillStyle = color.replace('1)', `${alpha})`);
-                canvasCtx.fill();
-            });
-
-            requestAnimationFrame(drawAnimatedDot);
-        }
-
-        function onResults(results) {
-            canvasCtx.save();
-            detectOpenHand(results);
-
-            if (detectedCenters.length > 0) {
-                if (!animating) {
-                    console.log("Starting animation at centers:", detectedCenters); // Debug log
-                    startTime = performance.now();
-                    animating = true;
-                    if (!soundPlayed) {
-                        blastSound.play().catch(err => console.error("Audio play failed:", err));
-                        soundPlayed = true;
-                    }
-                    requestAnimationFrame(drawAnimatedDot);
-                }
-            } else {
-                animating = false;
-                soundPlayed = false;
-                canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            }
-
-            canvasCtx.restore();
-        }
-
-        // Camera setup
-        const camera = new Camera(videoElement, {
+        const camera = new Camera(video, {
             onFrame: async () => {
-                await hands.send({ image: videoElement });
+                await hands.send({image: video});
             },
-            width: 1280,
-            height: 720
+            width: 1920,
+            height: 1080
         });
-        camera.start().catch(err => console.error("Camera start failed:", err));
+        
+        function detectHands(results) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            if (results.multiHandLandmarks) {
+                for (let landmarks of results.multiHandLandmarks) {
+                    drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {color: 'cyan', lineWidth: 2});
+                    drawLandmarks(ctx, landmarks, {color: 'red', radius: 5});
+                    
+                    const fingertips = [8, 12, 16, 20].map(i => landmarks[i]);
+                    const palmPoints = [landmarks[0], landmarks[5], landmarks[17]];
+                    const palmCenter = {
+                        x: palmPoints.reduce((sum, p) => sum + p.x, 0) / 3,
+                        y: palmPoints.reduce((sum, p) => sum + p.y, 0) / 3
+                    };
+                    
+                    let isOpen = fingertips.every(f => {
+                        const distance = Math.sqrt(
+                            Math.pow(palmCenter.x - f.x, 2) + 
+                            Math.pow(palmCenter.y - f.y, 2)
+                        );
+                        return distance > 0.15 && palmCenter.y > f.y;
+                    });
 
-        // Cleanup on page unload
-        window.addEventListener('unload', () => {
-            camera.stop();
-            hands.close();
-        });
+                    if (isOpen && !wasOpen && !animating) {
+                        animateEffect(palmCenter.x * canvas.width, palmCenter.y * canvas.height);
+                    }
+                    wasOpen = isOpen;
+                }
+            } else {
+                wasOpen = false;
+            }
+        }
+
+        function animateEffect(x, y) {
+            animating = true;
+            let size = 10;
+            let alpha = 1.0;
+            const colors = ['yellow', 'white', 'red', 'black'];
+            let colorIndex = 0;
+            
+            // Mostrar overlay y reproducir sonido
+            overlay.style.display = 'block';
+            sound.currentTime = 0;
+            sound.play().catch(e => console.log("Error al reproducir sonido:", e));
+            
+            function step() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = colors[colorIndex];
+                ctx.globalAlpha = alpha;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                size += 10;
+                alpha -= 0.02;
+                if (size > 100) colorIndex = Math.min(colorIndex + 1, colors.length - 1);
+                
+                if (alpha > 0) requestAnimationFrame(step);
+                else {
+                    animating = false;
+                    overlay.style.display = 'none'; // Ocultar overlay al finalizar
+                }
+            }
+            requestAnimationFrame(step);
+        }
+        
+        async function main() {
+            await setupCamera();
+            camera.start();
+        }
+        
+        main();
     </script>
 </body>
 </html>
